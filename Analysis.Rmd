@@ -1,0 +1,67 @@
+---
+title: "Practical Machine Learning Project"
+author: "Bill Su"
+date: "June 17, 2015"
+output: html_document
+---
+## Introduction
+
+The purpose of this report is to analyze the weight lifting dataset and come up with a machine learning algorithm that is able to accuratly predict the mannor which participants have conducted their excercise based on sensor data. 
+
+## Loading the Data
+There are two datasets to be loaded in this project, the pml-testing dataset, and the pml-training dataset, the procedure for laoding is illustrated below. 
+
+```{r}
+library(caret)
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```
+
+## Cleaning the Data
+In the first glimse of all datasets, I have realized that there are a lot of columns with almost no value or a lot of NAs. At the same time, some of the values are simply not meaningful for our prediction and classification, for example, the timestamps and subject names. Therefore, I believe it is proper to select out only meaningful covariates for our machine learning algorithm. 
+```{r, echo=FALSE}
+## remoing all variables where over 80% of the value is NA and Blank
+training <- training[, colSums(is.na(training) | training == "") < (nrow(training)*.2)]
+
+## removing irrelevant measures
+training <- training[,6:60]
+```
+
+##Subsetting for analysis and cross validation
+In this section, I am going to divide up the training set into a training and a softtest set in order to validate my set before it was putting onto a test. We are going to use 10% of the training for training and rest 90% for testing. I reason I have choosen such small amount of sample for testing is due to the insane amount of time to process large data sets in caret. 
+
+```{r}
+intrain <- createDataPartition(y=training$classe, p=.9, list = FALSE)
+training_test = training[intrain,]
+training_train = training[-intrain,]
+```
+
+##Creating the Model
+Due to the nature of the question, a classification model is going to be conducted.I have choosen to conduct a random forest model due to its popularity in the realm of data science. I have also conducted a PART analysis for faster classification, but the accuracy was actually worse than that of random forest. The accuracy of both models are displayed below, I have decided to use the rf model since it was way more accurate. For both models I have used 3-fold cross validation in order to cross validate. 
+
+```{r}
+#Cross Validation Parameter
+rfModel <- train(classe ~.,method = "rf", trControl=trainControl(method="cv",number=3), data = training_train)
+print(rfModel)
+
+rpartModel <- train(classe ~.,method = "PART", trControl = trainControl(method = "cv", number = 3), data = training_train)
+print(rpartModel)
+```
+From the result, we can see that the random forest model has 94.795% accuracy and the Kappa is .934, which are pretty high. I therefore estimate the out of sample error rate around .05.
+
+The PART model was not terrible as well, with accuracy of 85.612% and Kappa of .8179. The out of sample error for this model should be around .15
+
+##Missclassification Rate/Out of Sample Classification Error
+
+I have also calculated missclassification rate for both models for the training_test set.The result is displayed below. Those two results illustrate a measure of the out of sample classification error for both models. 
+
+```{r}
+missClass = function(values,prediction){sum(prediction != values)/length(values)}
+rfPredict_test <- predict(rfModel, newdata = training_test)
+missClass(training_test$classe, rfPredict_test)
+
+rpartPredict_test <- predict(rpartModel, training_test)
+missClass(training_test$classe, rpartPredict_test)
+```
+
+As illustrated, both model's out of sample error rate is actually better than my prediction above. 
